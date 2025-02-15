@@ -1,0 +1,169 @@
+{
+  "name": "Call Processing Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "/webhook/call-completed",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.close.com/api/v1/activity/call/{{ $input.body.call_id }}",
+        "authentication": "headerAuth",
+        "headerParameters": {
+          "values": [
+            {
+              "name": "Authorization",
+              "value": "Basic {{ $env.CLOSE_API_KEY }}"
+            }
+          ]
+        }
+      },
+      "name": "Get Call Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Prepare data for Python script\nconst callData = {\n  lead_id: $input.body.lead_id,\n  user_id: $input.body.user_id,\n  user_name: $input.body.user_name,\n  call_id: $input.body.call_id,\n  transcript: $json.data.note, // Close stores transcript in the note field\n  duration: $json.data.duration,\n  direction: $json.data.direction,\n  disposition: $json.data.disposition\n};\n\nreturn {json: callData};"
+      },
+      "name": "Prepare Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5000/process-call",
+        "sendBody": true,
+        "bodyParameters": {
+          "values": [
+            {
+              "name": "call_data",
+              "value": "={{ $json }}"
+            }
+          ]
+        }
+      },
+      "name": "Call Python Service",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        850,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.success }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "Success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1050,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendBody": true,
+        "bodyParameters": {
+          "values": [
+            {
+              "name": "text",
+              "value": "=Error processing call: {{ $json.error }}"
+            }
+          ]
+        }
+      },
+      "name": "Send Error to Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        1250,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Call Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Call Details": {
+      "main": [
+        [
+          {
+            "node": "Prepare Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Data": {
+      "main": [
+        [
+          {
+            "node": "Call Python Service",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Python Service": {
+      "main": [
+        [
+          {
+            "node": "Success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Success?": {
+      "main": [
+        [
+          {
+            "node": "Send Error to Slack",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  }
+} 

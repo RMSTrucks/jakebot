@@ -1,0 +1,7 @@
+Agent: I understand you had an accident yesterday.
+Customer: Yes, my car was hit while parked.
+Agent: I'll file the claim right away since this is urgent.
+Customer: How long will it take?
+Agent: I'll process this immediately and get back to you within 30 minutes.
+Customer: Thank you.
+Agent: I'll also send you the claim documentation by email today. 

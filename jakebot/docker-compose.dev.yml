@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  api:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/app  # Mount entire project for development
+    environment:
+      - PYTHONPATH=/app
+      - API_LOG_LEVEL=DEBUG
+    command: uvicorn api.main:app --host 0.0.0.0 --port 5000 --reload  # Enable auto-reload
+
+  n8n:
+    environment:
+      - N8N_LOG_LEVEL=debug 

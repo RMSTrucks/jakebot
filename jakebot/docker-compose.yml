@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    container_name: jakebot-api
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./logs:/app/logs
+      - ./.env:/app/.env
+      - ./api:/app/api  # Mount source code for development
+    environment:
+      - PYTHONUNBUFFERED=1
+      - API_LOG_LEVEL=${API_LOG_LEVEL:-INFO}
+    restart: unless-stopped
+    networks:
+      - jakebot-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      - n8n
+
+  n8n:
+    image: n8nio/n8n
+    container_name: jakebot-n8n
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n  # Persistent volume for n8n data
+    environment:
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD:-admin}
+      - WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://localhost:5678/}
+      - N8N_LOG_LEVEL=${N8N_LOG_LEVEL:-info}
+    restart: unless-stopped
+    networks:
+      - jakebot-network
+
+  prometheus:
+    image: prom/prometheus
+    container_name: jakebot-prometheus
+    volumes:
+      - ./monitoring/prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - "9090:9090"
+    networks:
+      - jakebot-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana
+    container_name: jakebot-grafana
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3000:3000"
+    networks:
+      - jakebot-network
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+networks:
+  jakebot-network:
+    driver: bridge
+
+volumes:
+  n8n_data:  # Persistent volume for n8n data
+  prometheus_data:
+  grafana_data: 

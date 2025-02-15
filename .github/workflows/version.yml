@@ -1,0 +1,44 @@
+name: Version Management
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**/__init__.py'
+      - '**/version.py'
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    if: "!startsWith(github.event.head_commit.message, 'bump:')"
+    
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    
+    - name: Get latest version
+      id: version
+      run: |
+        current_version=$(grep -m1 "__version__ = " jakebot/__init__.py | cut -d'"' -f2)
+        echo "::set-output name=current::$current_version"
+    
+    - name: Bump version
+      id: bump
+      run: |
+        IFS='.' read -r -a version_parts <<< "${{ steps.version.outputs.current }}"
+        new_patch=$((version_parts[2] + 1))
+        new_version="${version_parts[0]}.${version_parts[1]}.$new_patch"
+        echo "::set-output name=new::$new_version"
+    
+    - name: Update version files
+      run: |
+        sed -i "s/__version__ = \".*\"/__version__ = \"${{ steps.bump.outputs.new }}\"/" jakebot/__init__.py
+    
+    - name: Commit version bump
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add jakebot/__init__.py
+        git commit -m "bump: version ${{ steps.bump.outputs.new }}"
+        git push 
