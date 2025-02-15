@@ -101,19 +101,31 @@ class GitOps:
     
     def create_release(self, version: str):
         """Create a new release"""
-        # Ensure we're on main
-        self.run_command(['git', 'checkout', 'main'])
-        self.run_command(['git', 'pull', 'origin', 'main'])
-        
-        # Merge develop
-        self.run_command(['git', 'merge', 'develop'])
-        
-        # Create and push tag
-        tag = f"v{version}"
-        self.run_command(['git', 'tag', '-a', tag, '-m', f"Release {tag}"])
-        self.run_command(['git', 'push', 'origin', tag])
-        
-        logger.info(f"Created release {tag}")
+        try:
+            # Ensure we're on main
+            self.run_command(['git', 'checkout', 'main'])
+            self.run_command(['git', 'pull', 'origin', 'main'])
+            
+            # Check if develop branch exists
+            try:
+                self.run_command(['git', 'checkout', 'develop'])
+                self.run_command(['git', 'pull', 'origin', 'develop'])
+                
+                # Merge develop into main
+                self.run_command(['git', 'checkout', 'main'])
+                self.run_command(['git', 'merge', 'develop'])
+            except subprocess.CalledProcessError:
+                logger.warning("No develop branch found, creating release from main")
+            
+            # Create and push tag
+            tag = f"v{version}"
+            self.run_command(['git', 'tag', '-a', tag, '-m', f"Release {tag}"])
+            self.run_command(['git', 'push', 'origin', tag])
+            
+            logger.info(f"Created release {tag}")
+        except Exception as e:
+            logger.error(f"Failed to create release: {str(e)}")
+            raise
 
 def main():
     parser = argparse.ArgumentParser(description="Git operations automation")
