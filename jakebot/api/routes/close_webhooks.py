@@ -85,29 +85,20 @@ async def handle_call_completed(
         # Log the webhook receipt
         logger.info(f"Received call completion webhook for call {call_data['call_id']}")
         
-        try:
-            # Get full call details including transcript
-            call_details = close.get_call(call_data["call_id"])
-            call_data["transcript"] = call_details.get("note", "")
-            
-            # Add call processing to background tasks
-            background_tasks.add_task(process_call_async, call_data)
-            
-            return {
-                "status": "success",
-                "message": "Webhook received and processing initiated",
-                "call_id": call_data["call_id"],
-                "timestamp": datetime.now().isoformat()
-            }
-            
-        except CloseAPIError as e:
-            logger.error(f"Close API error: {str(e)}")
-            ERROR_COUNT.labels(error_type="CloseAPIError").inc()
-            raise HTTPException(
-                status_code=e.status_code or 500,
-                detail=str(e)
-            )
-            
+        # Get full call details including transcript
+        call_details = close.get_call(call_data["call_id"])
+        call_data["transcript"] = call_details.get("recording_transcript", {}).get("summary_text", "")
+        
+        # Add call processing to background tasks
+        background_tasks.add_task(process_call_async, call_data)
+        
+        return {
+            "status": "success",
+            "message": "Webhook received and processing initiated",
+            "call_id": call_data["call_id"],
+            "timestamp": datetime.now().isoformat()
+        }
+        
     except ValueError as e:
         logger.error(f"Validation error: {str(e)}")
         ERROR_COUNT.labels(error_type="ValueError").inc()
@@ -116,4 +107,4 @@ async def handle_call_completed(
     except Exception as e:
         logger.error(f"Error processing Close webhook: {str(e)}", exc_info=True)
         ERROR_COUNT.labels(error_type=type(e).__name__).inc()
-        raise HTTPException(status_code=500, detail=str(e)) 
+        raise HTTPException(status_code=500, detail=str(e))

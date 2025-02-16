@@ -1,32 +1,35 @@
-name: CI/CD Pipeline
+name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches:
+      - main
   pull_request:
-    branches: [ main, develop ]
+    branches:
+      - main
 
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: [3.9, 3.10]
-
     steps:
-    - uses: actions/checkout@v2
-    
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
-      with:
-        python-version: ${{ matrix.python-version }}
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install flake8 black mypy bandit
-    
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Run tests
+        run: |
+          pytest --cov=jakebot
+
     - name: Code style check
       run: |
         black --check jakebot
@@ -39,14 +42,6 @@ jobs:
     - name: Security check
       run: |
         bandit -r jakebot
-    
-    - name: Run tests
-      run: |
-        pytest --cov=jakebot --cov-report=xml
-      env:
-        NOWCERTS_API_KEY: ${{ secrets.NOWCERTS_API_KEY }}
-        CLOSE_API_KEY: ${{ secrets.CLOSE_API_KEY }}
-        ENVIRONMENT: test
     
     - name: Upload coverage
       uses: codecov/codecov-action@v2

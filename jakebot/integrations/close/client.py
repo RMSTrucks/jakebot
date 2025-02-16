@@ -6,6 +6,7 @@ import hashlib
 import json
 from datetime import datetime
 from tenacity import retry, stop_after_attempt, wait_exponential
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
@@ -34,27 +35,17 @@ class CloseClient:
             "Content-Type": "application/json"
         })
     
+    @lru_cache(maxsize=100)  # Cache up to 100 call details
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=4, max=10),
         retry=lambda e: isinstance(e, (requests.RequestException, CloseAPIError))
     )
     def get_call(self, call_id: str) -> Dict[str, Any]:
-        """
-        Get call details including transcript
-        
-        Args:
-            call_id: The Close call ID
-            
-        Returns:
-            Dict containing call details
-            
-        Raises:
-            CloseAPIError: If the API request fails
-        """
+        """Get call details including transcript"""
         try:
-            endpoint = f"{self.base_url}/activity/call/{call_id}"
-            response = self.session.get(endpoint)
+            endpoint = f"{self.base_url}/activity/call/{call_id}/"
+            response = self.session.get(endpoint, params={"_fields": "recording_transcript"})
             response.raise_for_status()
             
             data = response.json()
@@ -73,7 +64,7 @@ class CloseClient:
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=4, max=10)
     )
-    def create_task(self, 
+    async def create_task(self, 
                     lead_id: str, 
                     description: str, 
                     due_date: Optional[datetime] = None,
@@ -116,6 +107,10 @@ class CloseClient:
             
             task_data = response.json()
             logger.info(f"Successfully created task for lead {lead_id}")
+            
+            # Send notification to Slack
+            send_slack_notification(f"New task created for lead {lead_id}: {description}")
+            
             return task_data
             
         except requests.RequestException as e:
@@ -153,4 +148,11 @@ class CloseClient:
             
         except Exception as e:
             logger.error(f"Error verifying webhook signature: {str(e)}")
-            return False 
+            return False
+
+def send_slack_notification(message: str):
+    webhook_url = "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
+    payload = {"text": message}
+    response = requests.post(webhook_url, json=payload)
+    if response.status_code != 200:
+        raise ValueError(f"Request to Slack returned an error {response.status_code}, the response is:\n{response.text}") 
